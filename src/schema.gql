@@ -1,0 +1,13 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type Query {
+  resource(id: Int!): Resource!
+}
+
+type Resource {
+  IMDBLink: String
+  source: String
+  title: String!
+}

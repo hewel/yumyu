@@ -1,25 +1,14 @@
 import * as cheerio from 'cheerio';
 import urlcat from 'urlcat';
-import { pipe, fromPairs, map, dropWhile, isEmpty } from 'rambda';
+import { pipe, fromPairs, map, test, groupBy, merge } from 'rambda';
+import {
+  Labelname,
+  TitleLabelname,
+  labelnameHashmap,
+  titleLabelnameHashmaps,
+} from './hashmap';
 import request, { PREFIXURL } from './request';
-import { parseLabel, findBy, trimAll } from './utils';
-
-type Labelname =
-  | 'releaseYear'
-  | 'genre'
-  | 'status'
-  | 'format'
-  | 'region'
-  | 'watermark';
-
-const labelnameHashmap: Record<Labelname, string> = {
-  releaseYear: '时间',
-  genre: '类型',
-  status: '状态',
-  format: '格式',
-  region: '地区',
-  watermark: '水印',
-};
+import { parseLabel, findBy, trimAll, matchTitleLabel } from './utils';
 
 async function getList() {
   const { body } = await request.get('forum-index-fid-950-page-1.htm');
@@ -59,9 +48,7 @@ async function getList() {
   const groupLabels = pipe<
     readonly string[],
     readonly string[][],
-    {
-      [key: string]: string;
-    }
+    Partial<Record<Labelname, string>>
   >(
     map<string, string[]>((text) => {
       const key = findBy<string[]>((list: string[]) => list.includes(text))(
@@ -70,6 +57,18 @@ async function getList() {
       return [key, trimAll(text)];
     }),
     fromPairs,
+  );
+
+  const groupTitleLabels = pipe(
+    groupBy((label: string) => {
+      const key =
+        titleLabelnameHashmaps.find(({ match }) => test(match, label))?.key ||
+        'title';
+      return key;
+    }),
+    map<string[], string, never>((labels) =>
+      labels.length > 0 ? labels.join(' ') : labels[0],
+    ),
   );
 
   const posts = listDoms.toArray().map((el) => {
@@ -83,15 +82,17 @@ async function getList() {
       .toArray()
       .map((el) => parseLabel($(el).text().trim()));
 
-    const labels = groupLabels(labelTexts) as Partial<
-      Record<Labelname, string>
+    const labels = groupLabels(labelTexts);
+    const titleLabels = groupTitleLabels(matchTitleLabel(rawtitle)) as Partial<
+      Record<TitleLabelname | 'title', string>
     >;
+    const allLabels = merge(labels, titleLabels);
 
     return {
       rawtitle,
       link,
       source: urlcat(PREFIXURL, link),
-      ...labels,
+      ...allLabels,
     };
   });
   return posts;
